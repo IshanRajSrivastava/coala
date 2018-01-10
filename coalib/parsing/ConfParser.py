@@ -32,6 +32,9 @@ class ConfParser:
         self.__rand_helper = None
         self.__init_sections()
 
+    def check_valid_line(self, file):
+        pass
+
     def parse(self, input_data, overwrite=False):
         """
         Parses the input and adds the new data to the existing.
@@ -50,7 +53,7 @@ class ConfParser:
 
         with open(input_data, 'r', encoding='utf-8') as _file:
             lines = _file.readlines()
-
+        print("LINES:", lines)
         if overwrite:
             self.__init_sections()
 

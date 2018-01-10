@@ -122,7 +122,7 @@ def load_config_file(filename, log_printer=None, silent=False):
                         ``False``.
     """
     filename = os.path.abspath(filename)
-
+    print("FILENAME:", filename)
     try:
         return ConfParser().parse(filename)
     except FileNotFoundError:
@@ -229,6 +229,7 @@ def load_configuration(arg_list,
                         dict(str, Section), targets: list(str)). (Types
                         indicated after colon.)
     """
+    print("ARG_LIST:", arg_list)
     cli_sections = parse_cli(arg_list=arg_list, arg_parser=arg_parser,
                              args=args)
     check_conflicts(cli_sections)
@@ -317,6 +318,8 @@ def find_user_config(file_path, max_trials=10):
     """
     file_path = os.path.normpath(os.path.abspath(os.path.expanduser(
         file_path)))
+    print("FILEPATH:", file_path)
+    print("I AM IN find_user_config")
     old_dir = None
     base_dir = (file_path if os.path.isdir(file_path)
                 else os.path.dirname(file_path))
@@ -482,6 +485,7 @@ def gather_configuration(acquire_settings,
                                 section
                              -  The targets list
     """
+    print("I AM IN CONFIGURATION GATHERING!!!!")
     if args is None:
         # Note: arg_list can also be []. Hence we cannot use
         # `arg_list = arg_list or default_list`
