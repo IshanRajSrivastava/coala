@@ -4,6 +4,7 @@ as the rest of coala the bearlib is designed to be as easy to use as possible
 while offering the best possible flexibility.
 """
 
+import cProfile
 import logging
 from functools import wraps
 
@@ -12,6 +13,14 @@ from coalib.settings.FunctionMetadata import FunctionMetadata
 
 def _do_nothing(x): return x
 
+def profile_bears_decorator(func):
+    def wrapping_function(*args, **kwargs):
+        prof = kwargs.get('profiler', False)
+        kwargs.pop('profiler')
+        if prof:
+            prof.enable()
+        return func(*args, **kwargs)
+    return wrapping_function
 
 def deprecate_settings(**depr_args):
     """
@@ -99,7 +108,6 @@ def deprecate_settings(**depr_args):
 
         logged_deprecated_args = set()
 
-        @wraps(func)
         def wrapping_function(*args, **kwargs):
             for arg, depr_value in wrapping_function.__metadata__.depr_values:
                 deprecated_arg = depr_value[0]
@@ -119,7 +127,13 @@ def deprecate_settings(**depr_args):
                     else:
                         kwargs[arg] = depr_arg_value
                     del kwargs[deprecated_arg]
-            return func(*args, **kwargs)
+            profile_bears = kwargs.get('profile_bears', False)
+            kwargs.pop('profile_bears')
+            if profile_bears:
+                return profile_bears_decorator(func)(*args, **kwargs)
+            else:
+                kwargs.pop('profiler')
+                return func(*args, **kwargs)
 
         new_metadata = FunctionMetadata.from_function(func)
         new_metadata.depr_values = []

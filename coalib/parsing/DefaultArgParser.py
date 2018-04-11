@@ -241,6 +241,13 @@ To run coala without user interaction, run the `coala --non-interactive`,
         '-r', '--relpath', nargs='?', const=True,
         help='return relative paths for files (must be called with --json)')
 
+    outputs_group.add_argument(
+        '--profile-bears', nargs='?', const=True,
+        default=False,  help='Provide profiler stats for `--profile-bears`'
+                             'as a file to the given directory or dump to'
+                             'console if none provided for all the bears'
+                             'being run')
+
     misc_group = arg_parser.add_argument_group('Miscellaneous')
 
     misc_group.add_argument(

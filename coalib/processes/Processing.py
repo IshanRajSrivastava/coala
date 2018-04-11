@@ -450,7 +450,8 @@ def instantiate_processes(section,
                         'message_queue': message_queue,
                         'control_queue': control_queue,
                         'timeout': 0.1,
-                        'debug': debug}
+                        'debug': debug,
+                        'profile_bears': section['profile_bears']}
 
     fill_queue(filename_queue, file_dict.keys())
     fill_queue(global_bear_queue, range(len(global_bear_list)))
