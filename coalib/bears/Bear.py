@@ -1,5 +1,6 @@
 import cProfile
 import inspect
+import io
 import itertools
 import pstats
 import sys
@@ -277,7 +278,7 @@ class Bear(Printer, LogPrinterMixin, metaclass=bearclass):
     def run(self, *args, dependency_results=None, **kwargs):
         raise NotImplementedError
 
-    def profile_bear_methods(self, *args, **kwargs):
+    def setup_profiler(self, *args, **kwargs):
         profile_bears = kwargs.get('profile_bears', False)
         prof = cProfile.Profile()
         if profile_bears:
@@ -285,7 +286,7 @@ class Bear(Printer, LogPrinterMixin, metaclass=bearclass):
                 kwargs.pop('profile_bears')
                 prof.enable()
             else:
-                kwargs['profiler']=prof
+                kwargs['profiler'] = prof
             retval = self.run(*args, **kwargs)
             if inspect.isgenerator(retval):
                 retval, retval_clone = itertools.tee(retval)
@@ -295,7 +296,9 @@ class Bear(Printer, LogPrinterMixin, metaclass=bearclass):
             ps = pstats.Stats(prof, stream=sys.stdout)
             ps.print_stats()
             return retval, args, kwargs
-        return False, False, False
+        else:
+            kwargs.pop('profile_bears')
+            return False, args, kwargs
 
     def run_bear_from_section(self, args, kwargs):
         try:
@@ -311,8 +314,10 @@ class Bear(Printer, LogPrinterMixin, metaclass=bearclass):
                 self.name), str(err))
             return
 
-        profile_bears_results, args, kwargs = self.profile_bear_methods(*args, **kwargs)
-        return profile_bears_results if args else self.run(*args, **kwargs)
+        profile_bears_results, args, kwargs = self.setup_profiler(
+            *args, **kwargs)
+        return profile_bears_results if profile_bears_results else self.run(
+            *args, **kwargs)
 
     def execute(self, *args, debug=False, **kwargs):
         name = self.name
