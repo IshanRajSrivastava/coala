@@ -128,10 +128,11 @@ def deprecate_settings(**depr_args):
                         kwargs[arg] = depr_arg_value
                     del kwargs[deprecated_arg]
             profile_bears = kwargs.get('profile_bears', False)
-            if not profile_bears is False:
+            str_profile_bears = str(profile_bears).lower().strip()
+            if not str_profile_bears == u'false':
                 kwargs.pop('profile_bears')
-            return profile_bears_decorator(func)(*args, **kwargs) if (
-                profile_bears) else func(*args, **kwargs)
+            return profile_bears_decorator(func)(*args, **kwargs) if not (
+                str_profile_bears == u'false') else func(*args, **kwargs)
 
         new_metadata = FunctionMetadata.from_function(func)
         new_metadata.depr_values = []

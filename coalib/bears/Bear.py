@@ -1,13 +1,14 @@
 import cProfile
 import inspect
-import io
 import itertools
 import pstats
 import sys
+import tempfile
 import traceback
 from functools import partial
-from os import makedirs
+from os import makedirs, fdopen, remove
 from os.path import join, abspath, exists
+from terminaltables import AsciiTable
 import requests
 from appdirs import user_data_dir
 
@@ -278,10 +279,62 @@ class Bear(Printer, LogPrinterMixin, metaclass=bearclass):
     def run(self, *args, dependency_results=None, **kwargs):
         raise NotImplementedError
 
+    def setup_profiler_table(self, prof):
+        fd, path = tempfile.mkstemp()
+        try:
+            with fdopen(fd, 'r+') as stream:
+                ps = pstats.Stats(
+                    prof, stream=stream).strip_dirs().sort_stats('cumtime')
+                ps.print_stats()
+                stream.flush()
+                stream.seek(0)
+                lines = stream.readlines()
+                stream.seek(0)
+                req_lines = []
+                table_header = []
+                for line in lines:
+                    if ('function calls' not in line and
+                        'listing order was used' not in line and
+                            line.strip(' \n\t') != ''):
+                        req_lines.append(line)
+                    elif line.strip(' \n\t') != '':
+                        table_header.append(line)
+
+                channel_values = [x for x in [y.split(' ') for y in
+                                              req_lines] if x and not x == '\n']
+                table_data = []
+                final_table_data = []
+                for x in channel_values:
+                    table_data.append(list(filter(lambda a: a != '', x)))
+                for x in table_data:
+                    start = ''
+                    flag = 0
+                    row = []
+                    for y in x:
+                        if y.startswith('{'):
+                            flag = 1
+                        if flag == 1:
+                            start = start + y + ' '
+                        elif y != '':
+                            t = ' '.join(y.split())
+                            row.append(t.strip())
+                    if start != '':
+                        row.append(start.strip())
+                    final_table_data.append(row)
+                table = AsciiTable(final_table_data)
+                for line in table_header:
+                    print(line)
+                print(table.table)
+        finally:
+            remove(path)
+
     def setup_profiler(self, *args, **kwargs):
         profile_bears = kwargs.get('profile_bears', False)
+        print('profile_bears', profile_bears)
+        str_profile_bears = str(profile_bears).lower().strip()
         prof = cProfile.Profile()
-        if profile_bears:
+        if not str_profile_bears == u'false':
+            # print('INSIDE IF')
             if 'wrapping_function of' not in str(self.run):
                 kwargs.pop('profile_bears')
                 prof.enable()
@@ -293,8 +346,16 @@ class Bear(Printer, LogPrinterMixin, metaclass=bearclass):
                 for i in retval_clone:
                     pass
             prof.disable()
-            ps = pstats.Stats(prof, stream=sys.stdout)
-            ps.print_stats()
+            if str_profile_bears == u'true':
+                self.setup_profiler_table(prof)
+            else:
+                try:
+                    stream = open(str_profile_bears, 'w+')
+                    ps = pstats.Stats(prof, stream=stream)
+                    ps.print_stats()
+                except FileNotFoundError:
+                    self.err('No such file or directory: {}'.format(
+                        str_profile_bears))
             return retval, args, kwargs
         else:
             kwargs.pop('profile_bears')
