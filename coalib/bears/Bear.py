@@ -7,6 +7,7 @@ import traceback
 from functools import partial
 from os import makedirs, fdopen, remove
 from os.path import join, abspath, exists
+from termcolor import colored, cprint
 from terminaltables import AsciiTable
 import requests
 from appdirs import user_data_dir
@@ -315,18 +316,23 @@ class Bear(Printer, LogPrinterMixin, metaclass=bearclass):
                 if not str_setting == u'':
                     try:
                         str_setting = str_setting.split('(', 1)[0]
+                        if 'args' in locals() and args != [u''] and (
+                                str_setting == u'reverse_order' or
+                                str_setting == u'strip_dirs'):
+                            raise ValueError(
+                                'The pstats method "{}" does'
+                                ' not accept any arguments.'
+                                'Discarding user settings.', str_setting)
+                        if 'args' in locals() and args == [u''] and not (
+                                str_setting == u'reverse_order' or
+                                str_setting == u'strip_dirs'):
+                            raise ValueError(
+                                'The pstats method "{}" requires an argument',
+                                str_setting)
                         flag = 1
                         if str_setting == u'reverse_order':
-                            if args and args != [u'']:
-                                raise ValueError(
-                                    'The pstats method "{}" does'
-                                    ' not accept any arguments', str_setting)
                             ps.reverse_order()
                         elif str_setting == u'strip_dirs':
-                            if args and args != [u'']:
-                                raise ValueError(
-                                    'The pstats method "{}" does'
-                                    ' not accept any arguments', str_setting)
                             ps.strip_dirs()
                         elif str_setting == u'add':
                             ps.add(*args)
@@ -349,13 +355,13 @@ class Bear(Printer, LogPrinterMixin, metaclass=bearclass):
                     except KeyError:
                         flag = 0
                         self.err(
-                            'Invalid arguments given to pstats method.'
+                            'Invalid arguments given to a pstats method.'
                             ' Applying default settings')
                         break
                     except UnboundLocalError:
                         flag = 0
                         self.err(
-                            'Given pstats method requires an argument. '
+                            'A given pstats method requires an argument. '
                             'Applying default settings')
                         break
                     except ValueError as err:
@@ -380,10 +386,11 @@ class Bear(Printer, LogPrinterMixin, metaclass=bearclass):
                 for line in lines:
                     if ('function calls' not in line and
                         'listing order was used' not in line and
+                        'Ordered by' not in line and
                             line.strip(' \n\t') != ''):
                         req_lines.append(line)
                     elif line.strip(' \n\t') != '':
-                        table_header.append(line)
+                        table_header.append(line.strip())
                 channel_values = [x for x in [y.split(' ') for y in
                                               req_lines] if x and not x == '\n']
                 table_data = []
@@ -405,10 +412,17 @@ class Bear(Printer, LogPrinterMixin, metaclass=bearclass):
                     if start != '':
                         row.append(start.strip())
                     final_table_data.append(row)
-                table = AsciiTable(final_table_data)
+                colored_table_data = []
+                colors = ['red', 'white', 'blue', 'yellow', 'magenta', 'green']
+                for x in final_table_data:
+                    row = []
+                    for index, y in enumerate(x):
+                        row.append(colored(y, colors[index]))
+                    colored_table_data.append(row)
+                table = AsciiTable(colored_table_data)
                 for line in table_header:
                     print(line)
-                print(table.table)
+                cprint(table.table)
         finally:
             remove(path)
 
@@ -436,9 +450,10 @@ class Bear(Printer, LogPrinterMixin, metaclass=bearclass):
                 self.setup_profiler_table(prof, profile_bears)
             else:
                 try:
-                    stream = open(str_profile_bears, 'w+')
+                    stream = open(str_profile_bears, 'r+')
                     ps = self.pstats_config(prof, stream, profile_bears)
                     ps.print_stats()
+                    stream.close()
                 except FileNotFoundError:
                     self.err('No such file or directory: "{}", '
                              'the first argument to `--profile-bears`'
