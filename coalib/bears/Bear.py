@@ -2,7 +2,6 @@ import cProfile
 import inspect
 import itertools
 import pstats
-import sys
 import tempfile
 import traceback
 from functools import partial
@@ -279,17 +278,103 @@ class Bear(Printer, LogPrinterMixin, metaclass=bearclass):
     def run(self, *args, dependency_results=None, **kwargs):
         raise NotImplementedError
 
-    def setup_profiler_table(self, prof):
+    def parenthesis_split(self, sentence, separator=',',
+                          lparen='(', rparen=')'):
+        nb_brackets = 0
+        sentence = sentence.strip(separator)
+        final = [0]
+        try:
+            for i, c in enumerate(sentence):
+                if c == lparen:
+                    nb_brackets += 1
+                elif c == rparen:
+                    nb_brackets -= 1
+                elif c == separator and nb_brackets == 0:
+                    final.append(i)
+                if nb_brackets < 0:
+                    raise ValueError('Invalid arguments to --profile-bears')
+            final.append(len(sentence))
+            if nb_brackets > 0:
+                raise ValueError('Invalid arguments to --profile-bears')
+        except ValueError as err:
+            self.err(err.args[0])
+            return
+        return([sentence[i:j].strip(separator) for i, j in zip(final,
+                                                               final[1:])])
+
+    def pstats_config(self, prof, stream, profile_bears):
+        flag = 0
+        ps = pstats.Stats(prof, stream=stream)
+        if len(profile_bears) > 1:
+            for setting in profile_bears[1:]:
+                str_setting = str(setting).lower().strip(' \n\t')
+                if u'(' in str(setting):
+                    args = str(setting).split('(', 1)[1].strip(
+                        ' \t\n)').replace('\'', '').replace(
+                        '"', '').replace(' ', '').split(',')
+                if not str_setting == u'':
+                    try:
+                        str_setting = str_setting.split('(', 1)[0]
+                        flag = 1
+                        if str_setting == u'reverse_order':
+                            if args and args != [u'']:
+                                raise ValueError(
+                                    'The pstats method "{}" does'
+                                    ' not accept any arguments', str_setting)
+                            ps.reverse_order()
+                        elif str_setting == u'strip_dirs':
+                            if args and args != [u'']:
+                                raise ValueError(
+                                    'The pstats method "{}" does'
+                                    ' not accept any arguments', str_setting)
+                            ps.strip_dirs()
+                        elif str_setting == u'add':
+                            ps.add(*args)
+                        elif str_setting == u'dump_stats':
+                            ps.dump_stats(*args)
+                        elif str_setting == u'sort_stats':
+                            ps.sort_stats(*args)
+                        elif str_setting == u'print_stats':
+                            ps.print_stats(*args)
+                        elif str_setting == u'print_callers':
+                            ps.print_callers(*args)
+                        elif str_setting == u'print_callees':
+                            ps.print_callees(*args)
+                        else:
+                            self.err('Unrecognized setting "{}" for pstats'
+                                     ' module. Applying default '
+                                     'settings'.format(str(setting)))
+                            flag = 0
+                            break
+                    except KeyError:
+                        flag = 0
+                        self.err(
+                            'Invalid arguments given to pstats method.'
+                            ' Applying default settings')
+                        break
+                    except UnboundLocalError:
+                        flag = 0
+                        self.err(
+                            'Given pstats method requires an argument. '
+                            'Applying default settings')
+                        break
+                    except ValueError as err:
+                        flag = 0
+                        self.err(str(err.args[0]).format(
+                            str(err.args[1]+'()'))+'. Applying '
+                                                   'default settings')
+                        break
+        return ps.sort_stats('cumtime').strip_dirs() if flag == 0 else ps
+
+    def setup_profiler_table(self, prof, profile_bears):
         fd, path = tempfile.mkstemp()
         try:
             with fdopen(fd, 'r+') as stream:
-                ps = pstats.Stats(
-                    prof, stream=stream).strip_dirs().sort_stats('cumtime')
+                ps = self.pstats_config(prof, stream, profile_bears)
                 ps.print_stats()
                 stream.flush()
                 stream.seek(0)
                 lines = stream.readlines()
-                stream.seek(0)
                 req_lines = []
                 table_header = []
                 for line in lines:
@@ -299,7 +384,6 @@ class Bear(Printer, LogPrinterMixin, metaclass=bearclass):
                         req_lines.append(line)
                     elif line.strip(' \n\t') != '':
                         table_header.append(line)
-
                 channel_values = [x for x in [y.split(' ') for y in
                                               req_lines] if x and not x == '\n']
                 table_data = []
@@ -330,11 +414,13 @@ class Bear(Printer, LogPrinterMixin, metaclass=bearclass):
 
     def setup_profiler(self, *args, **kwargs):
         profile_bears = kwargs.get('profile_bears', False)
-        print('profile_bears', profile_bears)
-        str_profile_bears = str(profile_bears).lower().strip()
+        profile_bears = self.parenthesis_split(str(profile_bears))
+        if profile_bears is None:
+            kwargs.pop('profile_bears')
+            return False, args, kwargs
+        str_profile_bears = str(profile_bears[0]).lower().strip()
         prof = cProfile.Profile()
         if not str_profile_bears == u'false':
-            # print('INSIDE IF')
             if 'wrapping_function of' not in str(self.run):
                 kwargs.pop('profile_bears')
                 prof.enable()
@@ -347,15 +433,17 @@ class Bear(Printer, LogPrinterMixin, metaclass=bearclass):
                     pass
             prof.disable()
             if str_profile_bears == u'true':
-                self.setup_profiler_table(prof)
+                self.setup_profiler_table(prof, profile_bears)
             else:
                 try:
                     stream = open(str_profile_bears, 'w+')
-                    ps = pstats.Stats(prof, stream=stream)
+                    ps = self.pstats_config(prof, stream, profile_bears)
                     ps.print_stats()
                 except FileNotFoundError:
-                    self.err('No such file or directory: {}'.format(
-                        str_profile_bears))
+                    self.err('No such file or directory: "{}", '
+                             'the first argument to `--profile-bears`'
+                             ' must be true or a valid file path'.format(
+                                 str_profile_bears))
             return retval, args, kwargs
         else:
             kwargs.pop('profile_bears')
